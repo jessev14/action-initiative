@@ -1,0 +1,58 @@
+{
+    "id": "action-initiative",
+    "title": "Action Initiative",
+    "description": "",
+    "authors": [
+        {
+            "name": "enso",
+            "discord": "enso#0361"
+        }
+    ],
+    "version": "1.0.0",
+    "compatibility": {
+        "minimum": "11",
+        "verified": "12"
+    },
+    "esmodules": [
+        "./scripts/action-initiative.js"
+    ],
+    "styles": [],
+    "packs": [
+    ],
+    "languages": [],
+    "relationships": {
+        "systems": [
+            {
+                "id": "dnd5e",
+                "type": "system",
+                "compatibility": {
+                    "minimum": "3.0.0",
+                    "verified": "3.0.0"
+                }
+            }
+        ],
+        "requires": [
+            {
+                "id": "lib-wrapper",
+                "type": "module",
+                "compatibility": {
+                    "minimum": "1",
+                    "verified": "1.12.7.1"
+                }
+            },
+            {
+                "id": "socketlib",
+                "type": "module",
+                "compatibility": {
+                    "minimum": "1",
+                    "verified": "1.1.0"
+                }
+            }
+        ]
+    },
+    "socket": true,
+    "flags": {},
+    "url": "",
+    "manifest": "",
+    "download": ""
+}
