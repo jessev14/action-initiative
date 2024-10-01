@@ -16,12 +16,22 @@ Hooks.once('init', () => {
         type: new foundry.data.fields.NumberField({ step: 1 }),
         scope: 'world',
         config: true,
-        default: 60
+        default: 60,
+        requiresReload: true,
+        onChange: () => {
+            game.settings.set(moduleID, 'timerCurrentTime', 0);
+        }
     });
 
     game.settings.register(moduleID, 'timerStartTime', {
         scope: 'world',
         type: Number,
+        default: 0
+    });
+
+    game.settings.register(moduleID, 'timerCurrentTime', {
+        scope: 'world',
+        type: new foundry.data.fields.NumberField({ min: 0 }),
         default: 0
     });
 });
@@ -32,14 +42,29 @@ Hooks.once('socketlib.ready', () => {
 });
 
 Hooks.once('ready', () => {
-    if (game.combat?.started) startTimer();
+    if (game.settings.get(moduleID, 'timerStartTime')) startTimer();
 });
 
 
 Hooks.on('renderCombatTracker', (app, [html], appData) => {
     const timerDiv = document.createElement('div');
     timerDiv.classList.add(`${moduleID}-timer`);
-    timerDiv.innerText = 'Time: --';
+    timerDiv.style.display = 'flex';
+    timerDiv.style['flex-direction'] = 'row';
+    // add play button for GMs.
+    const currentTime = game.settings.get(moduleID, 'timerCurrentTime');
+    if (currentTime) timerDiv.innerHTML = 'Time: ' + `${currentTime}`.padStart(2, '0');
+    else timerDiv.innerText = 'Time: --';
+    if (game.user.isGM && !currentTime) {
+        timerDiv.querySelector('a').addEventListener('click', async () => {
+            if (game.paused) return ui.notifications.warn('Cannot start timer while game is paused.');
+
+            await game.settings.set(moduleID, 'timerStartTime', Date.now());
+            await game.settings.set(moduleID, 'timerCurrentTime', 0);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return socket.executeForEveryone('startTimer');
+        });
+    }
     const header = html.querySelector('header.combat-tracker-header');
     header.prepend(timerDiv);
 
@@ -65,7 +90,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
     }
 });
 
-Hooks.on('combatStart', (combat, updateData) => onRoundStart(combat));
+// Hooks.on('combatStart', (combat, updateData) => onRoundStart(combat));
 
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
@@ -148,13 +173,30 @@ Hooks.on('hoverToken', (token, hoverIn) => {
     }
 });
 
+Hooks.on('pauseGame', async isPaused => {
+    if (isPaused) {
+        if (game.user === game.users.find(u => u.isGM && u.active)) {
+            const delta = Date.now() - game.settings.get(moduleID, 'timerStartTime');
+            const timerDuration = Math.max(0, game.settings.get(moduleID, 'timerDuration') - Math.floor(delta / 1000));
+            await game.settings.set(moduleID, 'timerCurrentTime', timerDuration);
+        }
+        if (timerInterval) clearInterval(timerInterval);
+    } else {
+        if (game.user === game.users.find(u => u.isGM && u.active)) {
+            const timerDuration = game.settings.get(moduleID, 'timerDuration');
+            const offsetSec = timerDuration - game.settings.get(moduleID, 'timerCurrentTime');
+            const newStartTime = Date.now() - (1000 * offsetSec);
+            await game.settings.set(moduleID, 'timerStartTime', newStartTime);
+            await game.settings.set(moduleID, 'timerCurrentTime', 0);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return socket.executeForEveryone('startTimer');
+        }
+    }
+});
 
-async function onRoundStart(combat, updateData, updateOptions) {
-    const timerDuration = game.settings.get(moduleID, 'timerDuration');
-    const timerDiv = document.querySelector(`div.${moduleID}-timer`);
-    timerDiv.innerText = `Time: ${timerDuration}`
-    if (game.user === game.users.find(u => u.isGM && u.active)) await game.settings.set(moduleID, 'timerStartTime', Date.now());
-    socket.executeForEveryone('startTimer');
+
+async function onRoundStart(combat) {
+    ui.combat.render();
 
     if (game.user === game.users.find(u => u.isGM && u.active)) {
         for (const token of canvas.tokens.placeables) {
@@ -163,7 +205,10 @@ async function onRoundStart(combat, updateData, updateOptions) {
                 token._applyRenderFlags({ redrawEffects: true });
             }
         }
-        return combat.resetAll();
+        await game.settings.set(moduleID, 'timerStartTime', 0);
+        await game.settings.set(moduleID, 'timerCurrentTime', 0);
+        await combat.resetAll();
+        return socket.executeForEveryone('startTimer');
     }
 };
 
@@ -171,6 +216,7 @@ function startTimer() {
     if (timerInterval) clearInterval(timerInterval);
     const startTime = game.settings.get(moduleID, 'timerStartTime');
     if (!startTime) return;
+    if (game.paused) return;
 
     timerInterval = setInterval(function () {
         const delta = Date.now() - startTime;
@@ -182,8 +228,10 @@ function startTimer() {
             timerInterval = null;
             timerDiv.innerText = 'Time: --';
 
-            if (game.user === game.users.find(u => u.isGM && u.active)) return game.settings.set(moduleID, 'timerStartTime', 0);
-            return;
+            if (game.user === game.users.find(u => u.isGM && u.active)) {
+                game.settings.set(moduleID, 'timerStartTime', 0);
+                return ui.combat.render();
+            }
         } else timerDiv.innerText = 'Time: ' + `${timerDuration}`.padStart(2, '0');
     }, 100);
 }
