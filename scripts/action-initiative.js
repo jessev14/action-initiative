@@ -51,10 +51,16 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
     timerDiv.classList.add(`${moduleID}-timer`);
     timerDiv.style.display = 'flex';
     timerDiv.style['flex-direction'] = 'row';
-    // add play button for GMs.
+    timerDiv.style['justify-content'] = 'center';
+    const timerText = document.createElement('div');
     const currentTime = game.settings.get(moduleID, 'timerCurrentTime');
-    if (currentTime) timerDiv.innerHTML = 'Time: ' + `${currentTime}`.padStart(2, '0');
-    else timerDiv.innerText = 'Time: --';
+    if (currentTime) timerText.innerHTML = 'Time: ' + `${currentTime}`.padStart(2, '0');
+    else timerText.innerText = 'Time: --';
+    timerText.style.margin = 'auto';
+    timerDiv.appendChild(timerText);
+    const timerButton = document.createElement('a');
+    timerButton.innerHTML = !timerInterval ? '<i class="fa-solid fa-play"></i>' : '<i class="fa-solid fa-arrow-rotate-right"></i>';
+    timerDiv.appendChild(timerButton);
     if (game.user.isGM && !currentTime) {
         timerDiv.querySelector('a').addEventListener('click', async () => {
             if (game.paused) return ui.notifications.warn('Cannot start timer while game is paused.');
@@ -62,6 +68,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
             await game.settings.set(moduleID, 'timerStartTime', Date.now());
             await game.settings.set(moduleID, 'timerCurrentTime', 0);
             await new Promise(resolve => setTimeout(resolve, 500));
+            ui.combat.render();
             return socket.executeForEveryone('startTimer');
         });
     }
@@ -86,6 +93,20 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
             const initiativeSpan = initiativeDiv.querySelector('span.initiative');
             const newText = initiativeSpan.innerText.slice(2);
             initiativeSpan.innerText = newText;
+            initiativeDiv.addEventListener('click', ev => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const combatantID = ev.target.closest('li.combatant').dataset.combatantId;
+                const combatant = game.combat.combatants.get(combatantID);
+                if (!combatant) return;
+                
+                const chatMessageID = combatant.getFlag(moduleID, 'chatMessageID');
+                const chatMessageEl = ui.chat.element[0].querySelector(`li[data-message-id="${chatMessageID}"`);
+                if (chatMessageEl) {
+                    ui.sidebar.activateTab('chat');
+                    chatMessageEl.scrollIntoView();
+                }
+            });
         }
     }
 });
@@ -112,7 +133,7 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
                     speaker: ChatMessage.getSpeaker({ actor }),
                     flavor: `${token.name} rolls for Initiatve!`
                 };
-                await roll.toMessage(chatData);
+                const chatMessage = await roll.toMessage(chatData);
                 let initiativeString = ``;
                 if (item.isHealing || !item.hasDamage) initiativeString += '3.';
                 else if (item.system.range.units === 'touch') initiativeString += '1.';
@@ -120,13 +141,14 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
                 initiativeString += `${roll.total}`.padStart(2, '0');
                 if (game.settings.get('dnd5e', 'initiativeDexTiebreaker')) initiativeString += `${actor.system.abilities.dex.value}`.padStart(2, '0');
 
+                await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id)
                 return combatant.update({ initiative: Number(initiativeString) });
             }
         }
     }
 });
 
-Hooks.on('dnd5e.rollAttack', (item, roll) => {
+Hooks.on('dnd5e.rollAttack', async (item, roll) => {
     const isRanged = item.system.actionType === 'rwak' || item.system.actionType === 'rsak';
     let initiativeString = isRanged ? '2.' : '1.';
     initiativeString += `${roll.total}`.padStart(2, '0');
@@ -134,7 +156,11 @@ Hooks.on('dnd5e.rollAttack', (item, roll) => {
     if (actor && game.settings.get('dnd5e', 'initiativeDexTiebreaker')) initiativeString += `${actor.system.abilities.dex.value}`.padStart(2, '0');
     const initiative = Number(initiativeString);
     const combatant = actor.getActiveTokens()[0]?.combatant;
-    if (combatant && game.combat.combatants.has(combatant.id)) return combatant.update({ initiative });
+    if (combatant && game.combat.combatants.has(combatant.id)) {
+        const chatMessage = game.messages.contents[game.messages.contents.length - 1];
+        await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id);
+        return combatant.update({ initiative });
+    }
 });
 
 Hooks.on('targetToken', async (user, targetedToken, isTargeted) => {
@@ -208,7 +234,8 @@ async function onRoundStart(combat) {
         await game.settings.set(moduleID, 'timerStartTime', 0);
         await game.settings.set(moduleID, 'timerCurrentTime', 0);
         await combat.resetAll();
-        return socket.executeForEveryone('startTimer');
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
     }
 };
 
@@ -222,17 +249,18 @@ function startTimer() {
         const delta = Date.now() - startTime;
         const timerDuration = game.settings.get(moduleID, 'timerDuration') - Math.floor(delta / 1000);
         const timerDiv = document.querySelector(`div.${moduleID}-timer`);
+        const timerText = timerDiv.querySelector('div');
 
         if (timerDuration <= 0) {
             clearInterval(timerInterval);
             timerInterval = null;
-            timerDiv.innerText = 'Time: --';
+            timerText.innerText = 'Time: --';
 
             if (game.user === game.users.find(u => u.isGM && u.active)) {
                 game.settings.set(moduleID, 'timerStartTime', 0);
                 return ui.combat.render();
             }
-        } else timerDiv.innerText = 'Time: ' + `${timerDuration}`.padStart(2, '0');
+        } else timerText.innerText = 'Time: ' + `${timerDuration}`.padStart(2, '0');
     }, 100);
 }
 
