@@ -116,6 +116,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
 Hooks.on('dnd5e.useItem', async (item, config, options) => {
+    lg('use item')
     const { actor } = item;
     if (!actor.inCombat) return;
     if (item.hasAttack) return;
@@ -141,6 +142,20 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
                 initiativeString += `${roll.total}`.padStart(2, '0');
                 if (game.settings.get('dnd5e', 'initiativeDexTiebreaker')) initiativeString += `${actor.system.abilities.dex.value}`.padStart(2, '0');
 
+                const dialogConfirm = await Dialog.wait({
+                    title: 'Update Initiative?',
+                    buttons: {
+                        confirm: {
+                            label: 'Confirm'
+                        },
+                        cancel: {
+                            label: 'Cancel'
+                        }
+                    },
+                    default: 'confirm'
+                });
+                if (dialogConfirm === 'cancel') return;
+
                 await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id)
                 return combatant.update({ initiative: Number(initiativeString) });
             }
@@ -158,6 +173,21 @@ Hooks.on('dnd5e.rollAttack', async (item, roll) => {
     const combatant = actor.getActiveTokens()[0]?.combatant;
     if (combatant && game.combat.combatants.has(combatant.id)) {
         const chatMessage = game.messages.contents[game.messages.contents.length - 1];
+
+        const dialogConfirm = await Dialog.wait({
+            title: 'Update Initiative?',
+            buttons: {
+                confirm: {
+                    label: 'Confirm'
+                },
+                cancel: {
+                    label: 'Cancel'
+                }
+            },
+            default: 'confirm'
+        });
+        if (dialogConfirm === 'cancel') return;
+
         await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id);
         return combatant.update({ initiative });
     }
