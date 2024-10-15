@@ -49,7 +49,6 @@ Hooks.once('ready', () => {
 
 
 Hooks.on('renderCombatTracker', (app, [html], appData) => {
-    lg(app)
     const timerDiv = document.createElement('div');
     timerDiv.classList.add(`${moduleID}-timer`);
     timerDiv.style.display = 'flex';
@@ -113,8 +112,6 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
         }
     }
 });
-
-// Hooks.on('combatStart', (combat, updateData) => onRoundStart(combat));
 
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
@@ -258,19 +255,21 @@ function startTimer() {
     timerInterval = setInterval(function () {
         const delta = Date.now() - startTime;
         const timerDuration = game.settings.get(moduleID, 'timerDuration') - Math.floor(delta / 1000);
-        const timerDiv = document.querySelector(`div.${moduleID}-timer`);
-        const timerText = timerDiv.querySelector('div');
+        const timerDivs = document.querySelectorAll(`div.${moduleID}-timer`);
+        for (const timerDiv of timerDivs) {
+            const timerText = timerDiv.querySelector('div');
+            if (timerDuration <= 0) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                timerText.innerText = 'Time: --';
+    
+                if (game.user === game.users.find(u => u.isGM && u.active)) {
+                    game.settings.set(moduleID, 'timerStartTime', 0);
+                    return ui.combat.render();
+                }
+            } else timerText.innerText = 'Time: ' + `${timerDuration}`.padStart(2, '0');
+        }
 
-        if (timerDuration <= 0) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-            timerText.innerText = 'Time: --';
-
-            if (game.user === game.users.find(u => u.isGM && u.active)) {
-                game.settings.set(moduleID, 'timerStartTime', 0);
-                return ui.combat.render();
-            }
-        } else timerText.innerText = 'Time: ' + `${timerDuration}`.padStart(2, '0');
     }, 100);
 }
 
