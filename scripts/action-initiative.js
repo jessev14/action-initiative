@@ -9,6 +9,7 @@ let socket;
 Hooks.once('init', () => {
     libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
+    libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
 
     game.settings.register(moduleID, 'timerDuration', {
         name: "Timer Duration",
@@ -47,6 +48,7 @@ Hooks.once('ready', () => {
 
 
 Hooks.on('renderCombatTracker', (app, [html], appData) => {
+    lg(app)
     const timerDiv = document.createElement('div');
     timerDiv.classList.add(`${moduleID}-timer`);
     timerDiv.style.display = 'flex';
@@ -116,15 +118,14 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
 Hooks.on('dnd5e.useItem', async (item, config, options) => {
-    lg('use item')
     const { actor } = item;
     if (!actor.inCombat) return;
     if (item.hasAttack) return;
 
-    if (item.hasDamage || item.type === 'spell') {
-        const spellAbl = actor.system.attributes.spellcasting;
+    if (item.hasDamage || item.type === 'spell' || item.hasSave) {
+        const spellAbl = actor.system.attributes.spellcasting || item.system.save.ability;
         const spellMod = actor.system.abilities[spellAbl]?.mod;
-        if (spellMod) {
+        if (spellMod !== undefined) {
             const token = actor.getActiveTokens(false, true)[0];
             const combatant = token?.combatant;
             if (combatant) {
@@ -142,20 +143,9 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
                 initiativeString += `${roll.total}`.padStart(2, '0');
                 if (game.settings.get('dnd5e', 'initiativeDexTiebreaker')) initiativeString += `${actor.system.abilities.dex.value}`.padStart(2, '0');
 
-                const dialogConfirm = await Dialog.wait({
-                    title: 'Update Initiative?',
-                    buttons: {
-                        confirm: {
-                            label: 'Confirm'
-                        },
-                        cancel: {
-                            label: 'Cancel'
-                        }
-                    },
-                    default: 'confirm'
-                });
-                if (dialogConfirm === 'cancel') return;
-
+                // const dialogConfirm = await updateInitiativeConfirmationDialog();
+                // if (dialogConfirm === 'no') return;
+        
                 await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id)
                 return combatant.update({ initiative: Number(initiativeString) });
             }
@@ -164,6 +154,8 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
 });
 
 Hooks.on('dnd5e.rollAttack', async (item, roll) => {
+    if (!item.updateInitiative) return;
+
     const isRanged = item.system.actionType === 'rwak' || item.system.actionType === 'rsak';
     let initiativeString = isRanged ? '2.' : '1.';
     initiativeString += `${roll.total}`.padStart(2, '0');
@@ -174,20 +166,7 @@ Hooks.on('dnd5e.rollAttack', async (item, roll) => {
     if (combatant && game.combat.combatants.has(combatant.id)) {
         const chatMessage = game.messages.contents[game.messages.contents.length - 1];
 
-        const dialogConfirm = await Dialog.wait({
-            title: 'Update Initiative?',
-            buttons: {
-                confirm: {
-                    label: 'Confirm'
-                },
-                cancel: {
-                    label: 'Cancel'
-                }
-            },
-            default: 'confirm'
-        });
-        if (dialogConfirm === 'cancel') return;
-
+        item.updateInitiative = false;
         await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id);
         return combatant.update({ initiative });
     }
@@ -315,4 +294,33 @@ async function drawTargets(wrapped) {
     this.effects.sortChildren();
     this.effects.renderable = true;
     this.renderFlags.set({ refreshEffects: true });
+}
+
+async function rollAttack(wrapped, options = {}) {
+    const dialogConfirm = await updateInitiativeConfirmationDialog();
+    if (dialogConfirm === 'cancel') return;
+    
+    if(dialogConfirm === 'yes') this.updateInitiative = true;
+    return wrapped(options);
+}
+
+async function updateInitiativeConfirmationDialog() {
+    const res = await Dialog.wait({
+        title: 'Update Initiative?',
+        content: 'If you wish to use this action to declare your initiative select "Yes"',
+        buttons: {
+            yes: {
+                label: 'Yes'
+            },
+            no: {
+                label: 'No'
+            },
+            cancel: {
+                label: 'Cancel'
+            }
+        },
+        default: 'yes',
+        close: () => 'cancel'
+    });
+    return res;
 }
