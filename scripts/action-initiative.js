@@ -9,6 +9,7 @@ let socket;
 Hooks.once('init', () => {
     libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
+    libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.use', useItem, 'MIXED');
     libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
 
     game.settings.register(moduleID, 'timerDuration', {
@@ -118,6 +119,8 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
 Hooks.on('dnd5e.useItem', async (item, config, options) => {
+    if (!item.updateInitiative) return;
+
     const { actor } = item;
     if (!actor.inCombat) return;
     if (item.hasAttack) return;
@@ -143,9 +146,7 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
                 initiativeString += `${roll.total}`.padStart(2, '0');
                 if (game.settings.get('dnd5e', 'initiativeDexTiebreaker')) initiativeString += `${actor.system.abilities.dex.value}`.padStart(2, '0');
 
-                // const dialogConfirm = await updateInitiativeConfirmationDialog();
-                // if (dialogConfirm === 'no') return;
-        
+                item.updateInitiative = false;
                 await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id)
                 return combatant.update({ initiative: Number(initiativeString) });
             }
@@ -294,6 +295,21 @@ async function drawTargets(wrapped) {
     this.effects.sortChildren();
     this.effects.renderable = true;
     this.renderFlags.set({ refreshEffects: true });
+}
+
+async function useItem(wrapped, ...args) {
+    const item = this;
+    const { actor } = item;
+    if (!actor?.inCombat) return wrapped(args);
+    if (item.hasAttack) return wrapped(args);
+
+    if (item.hasDamage || item.type === 'spell' || item.hasSave) {
+        const dialogConfirm = await updateInitiativeConfirmationDialog();
+        if (dialogConfirm === 'cancel') return;
+
+        if(dialogConfirm === 'yes') this.updateInitiative = true;
+        return wrapped(...args);
+    }
 }
 
 async function rollAttack(wrapped, options = {}) {
