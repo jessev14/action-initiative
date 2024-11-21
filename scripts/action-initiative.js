@@ -286,6 +286,8 @@ async function drawTargets(wrapped) {
     const targets = this.document.getFlag(moduleID, 'targets') || [];
     for (const targetUuid of targets) {
         const targetToken = await fromUuid(targetUuid);
+        if (!targetToken) continue;
+        
         const img = targetToken.texture.src;
         promises.push(this._drawEffect(img));
     }
