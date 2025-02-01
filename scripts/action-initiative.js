@@ -116,7 +116,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
 Hooks.on('dnd5e.useItem', async (item, config, options) => {
-    if (!item.updateInitiative) return;
+    if (!item.getFlag(moduleID, 'updateInitiative')) return;
 
     const { actor } = item;
     if (!actor.inCombat) return;
@@ -144,7 +144,8 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
                 if (game.settings.get('dnd5e', 'initiativeDexTiebreaker')) initiativeString += `${actor.system.abilities.dex.value}`.padStart(2, '0');
 
                 item.updateInitiative = false;
-                await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id)
+                await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id);
+                await item.unsetFlag(moduleID, 'updateInitiative');
                 return combatant.update({ initiative: Number(initiativeString) });
             }
         }
@@ -308,7 +309,7 @@ async function useItem(wrapped, ...args) {
         const dialogConfirm = await updateInitiativeConfirmationDialog();
         if (dialogConfirm === 'cancel') return;
 
-        if(dialogConfirm === 'yes') this.updateInitiative = true;
+        if (dialogConfirm === 'yes') await item.setFlag(moduleID, 'updateInitiative', true);
         return wrapped(...args);
     }
 }
