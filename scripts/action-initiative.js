@@ -117,6 +117,7 @@ Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(comb
 
 Hooks.on('dnd5e.useItem', async (item, config, options) => {
     if (!item.getFlag(moduleID, 'updateInitiative')) return;
+    if (game.user.id !== item.getFlag(moduleID, 'updateInitiative')) return;
 
     const { actor } = item;
     if (!actor.inCombat) return;
@@ -309,7 +310,7 @@ async function useItem(wrapped, ...args) {
         const dialogConfirm = await updateInitiativeConfirmationDialog();
         if (dialogConfirm === 'cancel') return;
 
-        if (dialogConfirm === 'yes') await item.setFlag(moduleID, 'updateInitiative', true);
+        if (dialogConfirm === 'yes') await item.setFlag(moduleID, 'updateInitiative', game.user.id);
         return wrapped(...args);
     }
 }
