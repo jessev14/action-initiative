@@ -10,7 +10,6 @@ Hooks.once('init', () => {
     libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
     libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.use', useItem, 'MIXED');
-    // libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
     libWrapper.register(moduleID, 'CONFIG.DND5E.activityTypes.attack.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
 
     game.settings.register(moduleID, 'timerDuration', {
@@ -102,7 +101,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
                 const combatantID = ev.target.closest('li.combatant').dataset.combatantId;
                 const combatant = game.combat.combatants.get(combatantID);
                 if (!combatant) return;
-                
+
                 const chatMessageID = combatant.getFlag(moduleID, 'chatMessageID');
                 const chatMessageEl = ui.chat.element[0].querySelector(`li[data-message-id="${chatMessageID}"`);
                 if (chatMessageEl) {
@@ -116,10 +115,8 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
-// Hooks.on('dnd5e.useItem', async (item, config, options) => {
 Hooks.on('dnd5e.postUseActivity', async (activity, usageConfig, results) => {
-    lg({activity, usageConfig, results})
-    return;
+    const { item } = activity;
     if (!item.getFlag(moduleID, 'updateInitiative')) return;
     if (game.user.id !== item.getFlag(moduleID, 'updateInitiative')) return;
     await item.unsetFlag(moduleID, 'updateInitiative');
@@ -158,7 +155,7 @@ Hooks.on('dnd5e.postUseActivity', async (activity, usageConfig, results) => {
 });
 
 Hooks.on('dnd5e.rollAttackV2', async (rolls, data) => {
-    const item = data.subject?.item;
+    const item = fromUuidSync(data.subject?.item.uuid);
     const roll = rolls[0];
     if (!item || !roll) return;
 
@@ -275,7 +272,7 @@ function startTimer() {
                 clearInterval(timerInterval);
                 timerInterval = null;
                 timerText.innerText = 'Time: --';
-    
+
                 if (game.user === game.users.find(u => u.isGM && u.active)) {
                     game.settings.set(moduleID, 'timerStartTime', 0);
                     return ui.combat.render();
@@ -300,7 +297,7 @@ async function drawTargets(wrapped) {
     for (const targetUuid of targets) {
         const targetToken = await fromUuid(targetUuid);
         if (!targetToken) continue;
-        
+
         const img = targetToken.texture.src;
         promises.push(this._drawEffect(img));
     }
@@ -327,10 +324,11 @@ async function useItem(wrapped, ...args) {
 }
 
 async function rollAttack(wrapped, ...args) {
+    const item = fromUuidSync(this.item.uuid);
     const dialogConfirm = await updateInitiativeConfirmationDialog();
     if (dialogConfirm === 'cancel') return;
-    
-    if (dialogConfirm === 'yes') await this.item.setFlag(moduleID, 'updateInitiative', game.user.id);
+
+    if (dialogConfirm === 'yes') await item.setFlag(moduleID, 'updateInitiative', game.user.id);
     return wrapped(...args);
 }
 
