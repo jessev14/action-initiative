@@ -116,7 +116,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
 Hooks.on('dnd5e.postUseActivity', async (activity, usageConfig, results) => {
-    const { item } = activity;
+    const item = fromUuidSync(activity.item.uuid);
     if (!item.getFlag(moduleID, 'updateInitiative')) return;
     if (game.user.id !== item.getFlag(moduleID, 'updateInitiative')) return;
     await item.unsetFlag(moduleID, 'updateInitiative');
