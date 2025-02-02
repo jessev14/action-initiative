@@ -10,7 +10,8 @@ Hooks.once('init', () => {
     libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
     libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.use', useItem, 'MIXED');
-    libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
+    // libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
+    libWrapper.register(moduleID, 'CONFIG.DND5E.activityTypes.attack.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
 
     game.settings.register(moduleID, 'timerDuration', {
         name: "Timer Duration",
@@ -93,8 +94,8 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
         initiativeDiv.style.background = backgroundColorMap[initiativeGroup];
         if (initiative) {
             const initiativeSpan = initiativeDiv.querySelector('span.initiative');
-            const newText = initiativeSpan.innerText.slice(2);
-            initiativeSpan.innerText = newText;
+            const newText = String(initiative).split('.')[1];
+            initiativeSpan.innerText = newText.slice(0, 2);
             initiativeDiv.addEventListener('click', ev => {
                 ev.preventDefault();
                 ev.stopPropagation();
@@ -115,9 +116,13 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
 
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
-Hooks.on('dnd5e.useItem', async (item, config, options) => {
+// Hooks.on('dnd5e.useItem', async (item, config, options) => {
+Hooks.on('dnd5e.postUseActivity', async (activity, usageConfig, results) => {
+    lg({activity, usageConfig, results})
+    return;
     if (!item.getFlag(moduleID, 'updateInitiative')) return;
     if (game.user.id !== item.getFlag(moduleID, 'updateInitiative')) return;
+    await item.unsetFlag(moduleID, 'updateInitiative');
 
     const { actor } = item;
     if (!actor.inCombat) return;
@@ -146,15 +151,21 @@ Hooks.on('dnd5e.useItem', async (item, config, options) => {
 
                 item.updateInitiative = false;
                 await combatant.setFlag(moduleID, 'chatMessageID', chatMessage.id);
-                await item.unsetFlag(moduleID, 'updateInitiative');
                 return combatant.update({ initiative: Number(initiativeString) });
             }
         }
     }
 });
 
-Hooks.on('dnd5e.rollAttack', async (item, roll) => {
-    if (!item.updateInitiative) return;
+Hooks.on('dnd5e.rollAttackV2', async (rolls, data) => {
+    const item = data.subject?.item;
+    const roll = rolls[0];
+    if (!item || !roll) return;
+
+    if (!item.getFlag(moduleID, 'updateInitiative')) return;
+    if (game.user.id !== item.getFlag(moduleID, 'updateInitiative')) return;
+
+    await item.unsetFlag(moduleID, 'updateInitiative');
 
     const isRanged = item.system.actionType === 'rwak' || item.system.actionType === 'rsak';
     let initiativeString = isRanged ? '2.' : '1.';
@@ -315,12 +326,12 @@ async function useItem(wrapped, ...args) {
     }
 }
 
-async function rollAttack(wrapped, options = {}) {
+async function rollAttack(wrapped, ...args) {
     const dialogConfirm = await updateInitiativeConfirmationDialog();
     if (dialogConfirm === 'cancel') return;
     
-    if(dialogConfirm === 'yes') this.updateInitiative = true;
-    return wrapped(options);
+    if (dialogConfirm === 'yes') await this.item.setFlag(moduleID, 'updateInitiative', game.user.id);
+    return wrapped(...args);
 }
 
 async function updateInitiativeConfirmationDialog() {
