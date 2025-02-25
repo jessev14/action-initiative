@@ -41,6 +41,7 @@ Hooks.once('init', () => {
 Hooks.once('socketlib.ready', () => {
     socket = socketlib.registerModule(moduleID);
     socket.register('startTimer', startTimer);
+    socket.register('combatRound', onRoundStart);
 });
 
 Hooks.once('ready', () => {
@@ -113,7 +114,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
     }
 });
 
-Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
+Hooks.on('combatRound', (combat, updateData, updateOptions) => socket.executeAsGM('combatRound', combat));
 
 Hooks.on('dnd5e.useItem', async (item, config, options) => {
     if (!item.getFlag(moduleID, 'updateInitiative')) return;
@@ -242,7 +243,7 @@ async function onRoundStart(combat) {
         }
         await game.settings.set(moduleID, 'timerStartTime', 0);
         await game.settings.set(moduleID, 'timerCurrentTime', 0);
-        await combat.resetAll();
+        await game.combats.get(combat._id).resetAll();
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = null;
     }
