@@ -11,7 +11,7 @@
     "version": "1.0.0",
     "compatibility": {
         "minimum": "11",
-        "verified": "12"
+        "verified": "13"
     },
     "esmodules": [
         "./scripts/action-initiative.js"
@@ -26,8 +26,8 @@
                 "id": "dnd5e",
                 "type": "system",
                 "compatibility": {
-                    "minimum": "4.0.0",
-                    "verified": "4.0.0"
+                    "minimum": "5.0.0",
+                    "verified": "5.0.0"
                 }
             }
         ],

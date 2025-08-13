@@ -48,7 +48,7 @@ Hooks.once('ready', () => {
 });
 
 
-Hooks.on('renderCombatTracker', (app, [html], appData) => {
+Hooks.on('renderCombatTracker', (app, html, appData) => {
     const timerDiv = document.createElement('div');
     timerDiv.classList.add(`${moduleID}-timer`);
     timerDiv.style.display = 'flex';
@@ -77,7 +77,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
     const header = html.querySelector('header.combat-tracker-header');
     header.prepend(timerDiv);
 
-    const combatantOl = html.querySelector('ol#combat-tracker');
+    const combatantOl = html.querySelector('ol.combat-tracker');
     for (const combatantLi of combatantOl.querySelectorAll('li.combatant')) {
         const combatantID = combatantLi.dataset.combatantId;
         const combatant = game.combat.combatants.get(combatantID);
@@ -92,9 +92,12 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
         const initiativeDiv = combatantLi.querySelector('div.token-initiative');
         initiativeDiv.style.background = backgroundColorMap[initiativeGroup];
         if (initiative) {
-            const initiativeSpan = initiativeDiv.querySelector('span.initiative');
-            const newText = String(initiative).split('.')[1];
-            initiativeSpan.innerText = newText.slice(0, 2);
+            const initInput = initiativeDiv.querySelector('input.initiative-input');
+            if (initInput) initInput.remove();
+
+            const initString = String(initiative);
+            const newText = initString.includes('.') ? initString.split('.')[1] : initString;
+            initiativeDiv.innerText = newText;
             initiativeDiv.addEventListener('click', ev => {
                 ev.preventDefault();
                 ev.stopPropagation();
@@ -103,7 +106,7 @@ Hooks.on('renderCombatTracker', (app, [html], appData) => {
                 if (!combatant) return;
 
                 const chatMessageID = combatant.getFlag(moduleID, 'chatMessageID');
-                const chatMessageEl = ui.chat.element[0].querySelector(`li[data-message-id="${chatMessageID}"`);
+                const chatMessageEl = ui.chat.element.querySelector(`li[data-message-id="${chatMessageID}"`);
                 if (chatMessageEl) {
                     ui.sidebar.activateTab('chat');
                     chatMessageEl.scrollIntoView();
@@ -164,7 +167,7 @@ Hooks.on('dnd5e.rollAttackV2', async (rolls, data) => {
 
     await item.unsetFlag(moduleID, 'updateInitiative');
 
-    const isRanged = item.system.actionType === 'rwak' || item.system.actionType === 'rsak';
+    const isRanged = data.subject.attack.type.value === 'ranged'
     let initiativeString = isRanged ? '2.' : '1.';
     initiativeString += `${roll.total}`.padStart(2, '0');
     const { actor } = item;
