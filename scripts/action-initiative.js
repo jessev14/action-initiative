@@ -7,7 +7,7 @@ let socket;
 
 
 Hooks.once('init', () => {
-    libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
+    // libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
     libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.use', useItem, 'MIXED');
     libWrapper.register(moduleID, 'CONFIG.DND5E.activityTypes.attack.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
@@ -96,7 +96,7 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
             if (initInput) initInput.remove();
 
             const initString = String(initiative);
-            const newText = initString.includes('.') ? initString.split('.')[1] : initString;
+            const newText = initString.includes('.') ? initString.split('.')[1].padEnd(2, '0') : initString;
             initiativeDiv.innerText = newText;
             initiativeDiv.addEventListener('click', ev => {
                 ev.preventDefault();
