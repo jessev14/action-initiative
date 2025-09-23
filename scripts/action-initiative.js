@@ -116,6 +116,15 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
     }
 });
 
+Hooks.on('updateCombatant', (combatant, data, context, id) => {
+    if (game.user.id !== game.users.find(u => u.active && u.isGM)?.id) return;
+
+    const combat = context.parent;
+    const { turns } = combat;
+    const allRolled = turns.every(t => t.initiative);
+    if (allRolled) return combat.update({turn: 0});
+});
+
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
 
 Hooks.on('dnd5e.postUseActivity', async (activity, usageConfig, results) => {
