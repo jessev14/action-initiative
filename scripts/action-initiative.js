@@ -11,6 +11,7 @@ Hooks.once('init', () => {
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
     libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.use', useItem, 'MIXED');
     libWrapper.register(moduleID, 'CONFIG.DND5E.activityTypes.attack.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
+    libWrapper.register(moduleID, 'CONFIG.Combatant.documentClass.prototype.getGroupingKey', getGroupingKey, 'OVERRIDE');
 
     game.settings.register(moduleID, 'timerDuration', {
         name: "Timer Duration",
@@ -363,4 +364,8 @@ async function updateInitiativeConfirmationDialog() {
         close: () => 'cancel'
     });
     return res;
+}
+
+function getGroupingKey() {
+    return null;
 }
