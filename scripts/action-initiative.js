@@ -7,11 +7,12 @@ let socket;
 
 
 Hooks.once('init', () => {
-    // libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
+    libWrapper.register(moduleID, 'CONFIG.Combat.documentClass.prototype._sortCombatants', newSortCombatants, 'OVERRIDE');
     libWrapper.register(moduleID, 'CONFIG.Token.objectClass.prototype._drawEffects', drawTargets, 'WRAPPER');
     libWrapper.register(moduleID, 'CONFIG.Item.documentClass.prototype.use', useItem, 'MIXED');
     libWrapper.register(moduleID, 'CONFIG.DND5E.activityTypes.attack.documentClass.prototype.rollAttack', rollAttack, 'MIXED');
     libWrapper.register(moduleID, 'CONFIG.Combatant.documentClass.prototype.getGroupingKey', getGroupingKey, 'OVERRIDE');
+    libWrapper.register(moduleID, 'foundry.applications.sidebar.tabs.CombatTracker.prototype._getEntryContextOptions', newCombatantEntryOptions, 'WRAPPER');
 
     game.settings.register(moduleID, 'timerDuration', {
         name: "Timer Duration",
@@ -83,22 +84,31 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
         const combatantID = combatantLi.dataset.combatantId;
         const combatant = game.combat.combatants.get(combatantID);
         const initiative = combatant.initiative;
+        const initativeRevealed = combatant.isOwner || combatant.getFlag(moduleID, 'initiativeRevealed');
 
-        const initiativeGroup = (initiative >= 3 || initiative === null) ? 'called' : initiative > 2 ? 'ranged' : 'melee';
+        const initiativeGroup = (initiative === null || !initativeRevealed) ? 'none' : initiative >= 3 ? 'called' : initiative > 2 ? 'ranged' : 'melee';
         const backgroundColorMap = {
+            none: 'rgba(0, 0, 0, 0.5)',
             called: 'rgba(74, 200, 31, 0.5)',
             ranged: 'rgba(31, 67, 200, 0.5)',
             melee: 'rgba(200, 31, 31, 0.5)'
         };
         const initiativeDiv = combatantLi.querySelector('div.token-initiative');
         initiativeDiv.style.background = backgroundColorMap[initiativeGroup];
+        if (game.user.isGM && !combatant.getFlag(moduleID, 'initiativeRevealed') && !combatant.hasPlayerOwner) initiativeDiv.style.color = 'black';
         if (initiative) {
             const initInput = initiativeDiv.querySelector('input.initiative-input');
             if (initInput) initInput.remove();
 
             const initString = String(initiative);
             const newText = initString.includes('.') ? initString.split('.')[1].padEnd(2, '0') : initString;
-            initiativeDiv.innerText = newText;
+
+            const isOwner = combatant.players.some(u => u.isOwner);
+
+            if (combatant.getFlag(moduleID, 'initiativeRevealed') || isOwner || game.user.isGM) initiativeDiv.innerText = newText;
+            else initiativeDiv.innerText = '?';
+
+
             initiativeDiv.addEventListener('click', ev => {
                 ev.preventDefault();
                 ev.stopPropagation();
@@ -123,7 +133,7 @@ Hooks.on('updateCombatant', (combatant, data, context, id) => {
     const combat = context.parent;
     const { turns } = combat;
     const allRolled = turns.every(t => t.initiative);
-    if (allRolled) return combat.update({turn: 0});
+    if (allRolled) return combat.update({ turn: 0 });
 });
 
 Hooks.on('combatRound', (combat, updateData, updateOptions) => onRoundStart(combat));
@@ -264,6 +274,11 @@ async function onRoundStart(combat) {
         await game.settings.set(moduleID, 'timerStartTime', 0);
         await game.settings.set(moduleID, 'timerCurrentTime', 0);
         await combat.resetAll();
+        const promises = [];
+        game.combat.combatants.forEach(c => {
+            promises.push(c.setFlag(moduleID, 'initiativeRevealed', false));
+        });
+        await Promise.all(promises);
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = null;
     }
@@ -297,9 +312,24 @@ function startTimer() {
 }
 
 function newSortCombatants(a, b) {
+    if (!game.user.isGM) {
+        const aOwner = a.players.some(u => u.isOwner);
+        const bOwner = b.players.some(u => u.isOwner);
+
+        const aInitiativeRevealed = a.getFlag(moduleID, 'initiativeRevealed') || aOwner;
+        const bInitiativeRevealed = b.getFlag(moduleID, 'initiativeRevealed') || bOwner;
+
+        if (!aInitiativeRevealed && !bInitiativeRevealed) return a.name.localeCompare(b.name);
+
+        if (!aInitiativeRevealed) return 1;
+
+        if (!bInitiativeRevealed) return -1;
+    }
+
     const ia = Number.isNumeric(a.initiative) ? a.initiative : Infinity;
     const ib = Number.isNumeric(b.initiative) ? b.initiative : Infinity;
     return (ib - ia) || (a.id > b.id ? 1 : -1);
+
 }
 
 async function drawTargets(wrapped) {
@@ -368,4 +398,42 @@ async function updateInitiativeConfirmationDialog() {
 
 function getGroupingKey() {
     return null;
+}
+
+function newCombatantEntryOptions(wrapped, ...args) {
+    const res = wrapped(args);
+    res.push(
+        {
+            name: 'Hide Iniative',
+            icon: '<i class=" fa-solid fa-eye-slash"></i>',
+            condition: li => {
+                const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                if (!game.user.isGM || combatant.hasPlayerOwner) return false;
+
+                return combatant.getFlag(moduleID, 'initiativeRevealed');
+            },
+            callback: li => {
+                const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                combatant.setFlag(moduleID, 'initiativeRevealed', false);
+
+            }
+        },
+        {
+            name: 'Show Iniative',
+            icon: '<i class=" fa-solid fa-eye"></i>',
+            condition: li => {
+                const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                if (!game.user.isGM || combatant.hasPlayerOwner) return false;
+
+                return !combatant.getFlag(moduleID, 'initiativeRevealed');
+            },
+            callback: li => {
+                const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                combatant.setFlag(moduleID, 'initiativeRevealed', true);
+            }
+
+        }
+    );
+
+    return res;
 }
