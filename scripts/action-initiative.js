@@ -457,7 +457,8 @@ function newCombatantEntryOptions(wrapped, ...args) {
             },
             callback: li => {
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
-                const turn = Array.prototype.indexOf(game.combat.turns, combatant);
+                const turn = game.combat.turns.indexOf(combatant);
+                lg({turn})
                 game.combat.update({ turn });
             }
         }
