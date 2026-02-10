@@ -125,6 +125,33 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
             });
         }
     }
+
+    if (!game.user.isGM) {
+        const combatantLiNodeList = combatantOl.querySelectorAll('li');
+        const combatantArr = Array.prototype.slice.call(combatantLiNodeList, 0);
+
+        combatantArr.sort((a, b) => {
+            const combatantA = game.combat.combatants.get(a.dataset.combatantId);
+            const combatantB = game.combat.combatants.get(b.dataset.combatantId);
+
+            const aOwner = combatantA.players.some(u => u.isOwner);
+            const bOwner = combatantB.players.some(u => u.isOwner);
+
+            const aInitiativeRevealed = combatantA.getFlag(moduleID, 'initiativeRevealed') || aOwner;
+            const bInitiativeRevealed = combatantB.getFlag(moduleID, 'initiativeRevealed') || bOwner;
+
+            if (!aInitiativeRevealed && !bInitiativeRevealed) return combatantA.name.localeCompare(combatantB.name);
+
+            if (!aInitiativeRevealed) return 1;
+
+            if (!bInitiativeRevealed) return -1;
+
+        });
+
+        combatantArr.forEach(n => n.parentNode.append(n));
+
+    }
+
 });
 
 Hooks.on('updateCombatant', (combatant, data, context, id) => {
@@ -312,20 +339,6 @@ function startTimer() {
 }
 
 function newSortCombatants(a, b) {
-    if (!game.user.isGM) {
-        const aOwner = a.players.some(u => u.isOwner);
-        const bOwner = b.players.some(u => u.isOwner);
-
-        const aInitiativeRevealed = a.getFlag(moduleID, 'initiativeRevealed') || aOwner;
-        const bInitiativeRevealed = b.getFlag(moduleID, 'initiativeRevealed') || bOwner;
-
-        if (!aInitiativeRevealed && !bInitiativeRevealed) return a.name.localeCompare(b.name);
-
-        if (!aInitiativeRevealed) return 1;
-
-        if (!bInitiativeRevealed) return -1;
-    }
-
     const ia = Number.isNumeric(a.initiative) ? a.initiative : Infinity;
     const ib = Number.isNumeric(b.initiative) ? b.initiative : Infinity;
     return (ib - ia) || (a.id > b.id ? 1 : -1);
@@ -405,7 +418,7 @@ function newCombatantEntryOptions(wrapped, ...args) {
     res.push(
         {
             name: 'Hide Iniative',
-            icon: '<i class=" fa-solid fa-eye-slash"></i>',
+            icon: '<i class="fa-solid fa-eye-slash"></i>',
             condition: li => {
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
                 if (!game.user.isGM || combatant.hasPlayerOwner) return false;
@@ -420,7 +433,7 @@ function newCombatantEntryOptions(wrapped, ...args) {
         },
         {
             name: 'Show Iniative',
-            icon: '<i class=" fa-solid fa-eye"></i>',
+            icon: '<i class="fa-solid fa-eye"></i>',
             condition: li => {
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
                 if (!game.user.isGM || combatant.hasPlayerOwner) return false;
@@ -432,6 +445,21 @@ function newCombatantEntryOptions(wrapped, ...args) {
                 combatant.setFlag(moduleID, 'initiativeRevealed', true);
             }
 
+        },
+        {
+            name: 'Set Current Combatant',
+            icon: '<i class="fa-solid fa-arrow-right"></i>',
+            condition: li => {
+                const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                if (!game.user.isGM || game.combat.combatant === combatant) return false;
+
+                return true;
+            },
+            callback: li => {
+                const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                const turn = Array.prototype.indexOf(game.combat.turns, combatant);
+                game.combat.update({ turn });
+            }
         }
     );
 
