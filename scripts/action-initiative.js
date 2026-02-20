@@ -38,6 +38,15 @@ Hooks.once('init', () => {
         type: new foundry.data.fields.NumberField({ min: 0 }),
         default: 0
     });
+
+    game.settings.register(moduleID, 'enableHideInitiative', {
+        name: 'Enable Initiative Hiding',
+        scope: 'world',
+        config: true,
+        type: Boolean,
+        default: true,
+        requiresReload: true
+    });
 });
 
 Hooks.once('socketlib.ready', () => {
@@ -95,7 +104,7 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
         };
         const initiativeDiv = combatantLi.querySelector('div.token-initiative');
         initiativeDiv.style.background = backgroundColorMap[initiativeGroup];
-        if (game.user.isGM && !combatant.getFlag(moduleID, 'initiativeRevealed') && !combatant.hasPlayerOwner) initiativeDiv.style.color = 'black';
+        if (game.user.isGM && !combatant.getFlag(moduleID, 'initiativeRevealed') && !combatant.hasPlayerOwner && game.settings.get(moduleID, 'enableHideInitiative')) initiativeDiv.style.color = 'black';
         if (initiative) {
             const initInput = initiativeDiv.querySelector('input.initiative-input');
             if (initInput) initInput.remove();
@@ -125,6 +134,8 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
             });
         }
     }
+
+    if (!game.settings.get(moduleID, 'enableHideInitiative')) return;
 
     if (!game.user.isGM) {
         const combatantLiNodeList = combatantOl.querySelectorAll('li');
@@ -420,6 +431,8 @@ function newCombatantEntryOptions(wrapped, ...args) {
             name: 'Hide Iniative',
             icon: '<i class="fa-solid fa-eye-slash"></i>',
             condition: li => {
+                if (!game.settings.get(moduleID, 'enableHideInitiative')) return false;
+
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
                 if (!game.user.isGM || combatant.hasPlayerOwner) return false;
 
@@ -435,6 +448,8 @@ function newCombatantEntryOptions(wrapped, ...args) {
             name: 'Show Iniative',
             icon: '<i class="fa-solid fa-eye"></i>',
             condition: li => {
+                if (!game.settings.get(moduleID, 'enableHideInitiative')) return false;
+
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
                 if (!game.user.isGM || combatant.hasPlayerOwner) return false;
 
@@ -450,6 +465,8 @@ function newCombatantEntryOptions(wrapped, ...args) {
             name: 'Set Current Combatant',
             icon: '<i class="fa-solid fa-arrow-right"></i>',
             condition: li => {
+                if (!game.settings.get(moduleID, 'enableHideInitiative')) return false;
+
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
                 if (!game.user.isGM || game.combat.combatant === combatant) return false;
 
@@ -458,7 +475,6 @@ function newCombatantEntryOptions(wrapped, ...args) {
             callback: li => {
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
                 const turn = game.combat.turns.indexOf(combatant);
-                lg({turn})
                 game.combat.update({ turn });
             }
         }
