@@ -298,6 +298,15 @@ Hooks.on('pauseGame', async isPaused => {
     }
 });
 
+Hooks.on('dnd5e.rollInitiative', (actor, combatants) => {
+    for (const combatant of combatants) {
+        const oldInitiative = combatant.initiative;
+        const oldInitString = `${oldInitiative}`.padStart(2,0);
+        const initiative = Number(`3.${oldInitString}`);
+        combatant.update({ initiative })
+    }
+});
+
 
 async function onRoundStart(combat) {
     ui.combat.render();
