@@ -168,6 +168,8 @@ Hooks.on('renderCombatTracker', (app, html, appData) => {
 Hooks.on('updateCombatant', (combatant, data, context, id) => {
     if (game.user.id !== game.users.find(u => u.active && u.isGM)?.id) return;
 
+    if (combatant[moduleID]) return combatant[moduleID] = false;
+
     const combat = context.parent;
     const { turns } = combat;
     const allRolled = turns.every(t => t.initiative);
@@ -301,7 +303,7 @@ Hooks.on('pauseGame', async isPaused => {
 Hooks.on('dnd5e.rollInitiative', (actor, combatants) => {
     for (const combatant of combatants) {
         const oldInitiative = combatant.initiative;
-        const oldInitString = `${oldInitiative}`.padStart(2,0);
+        const oldInitString = `${oldInitiative}`.padStart(2, 0);
         const initiative = Number(`3.${oldInitString}`);
         combatant.update({ initiative })
     }
@@ -437,7 +439,7 @@ function newCombatantEntryOptions(wrapped, ...args) {
     const res = wrapped(args);
     res.push(
         {
-            name: 'Hide Iniative',
+            name: 'Hide Initiative',
             icon: '<i class="fa-solid fa-eye-slash"></i>',
             condition: li => {
                 if (!game.settings.get(moduleID, 'enableHideInitiative')) return false;
@@ -449,12 +451,12 @@ function newCombatantEntryOptions(wrapped, ...args) {
             },
             callback: li => {
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                combatant[moduleID] = true;
                 combatant.setFlag(moduleID, 'initiativeRevealed', false);
-
             }
         },
         {
-            name: 'Show Iniative',
+            name: 'Show Initiative',
             icon: '<i class="fa-solid fa-eye"></i>',
             condition: li => {
                 if (!game.settings.get(moduleID, 'enableHideInitiative')) return false;
@@ -466,9 +468,9 @@ function newCombatantEntryOptions(wrapped, ...args) {
             },
             callback: li => {
                 const combatant = game.combat.combatants.get(li.dataset.combatantId);
+                combatant[moduleID] = true;
                 combatant.setFlag(moduleID, 'initiativeRevealed', true);
             }
-
         },
         {
             name: 'Set Current Combatant',
